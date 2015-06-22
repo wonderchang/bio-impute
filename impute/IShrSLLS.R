@@ -1,0 +1,108 @@
+#-----caculate distance 
+similarityCal<-function(vec, mat, method="EuDist"){
+  methods<-c("EuDist","cor","Angle")
+  switch(match.arg(method,methods),
+         EuDist=1/sqrt(rowSums((mat-matrix(vec,nc=length(vec),nr=nrow(mat),byrow=TRUE))^2)),
+         cor=apply(mat,1,function(i) abs(cor(i,vec,use="everything",method="pearson"))),
+         Angle=apply(mat,1,function(i) abs(sum(i * vec)/sqrt(sum(i^2)*sum(vec^2))))
+  )
+}
+
+#-----ShrSLLS impute-----
+ShrSLLS <- function(xmiss, K=10, sim.method="EuDist"){
+
+  miss.gene <- is.na(xmiss)
+  miss.row <- which(rowSums(miss.gene)!=0)
+  x.complete <- xmiss[-miss.row, ]
+  x.incomplete <- xmiss[miss.row, ]
+  miss.rate <- rowSums(is.na(x.incomplete))
+  miss.rate.order <- order(miss.rate)
+  therhold <- sum(miss.rate)/length(miss.rate)
+  x.incomplete <- x.incomplete[miss.rate.order, ]
+  x.imputed <- t(apply(x.incomplete, 1, function(row){
+    row.miss <- which(is.na(row))
+    sim <- similarityCal(row[-row.miss], x.complete[, -row.miss], sim.method)
+    sim.id <- order(sim, decreasing=T)[1:K]
+    x.tmp <- ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
+    x.Shrink <- as.vector((1 - (K-2)* var(x.tmp)/((length(row) - sum(is.na(row)))*sum(x.tmp**2)))) * x.tmp 
+    row[row.miss] <- t(x.complete[sim.id, row.miss, drop=FALSE]) %*% x.Shrink
+    if(length(row.miss) <= therhold){
+      x.complete <<- rbind(x.complete, row)
+    }
+    return(row)
+  }))
+  
+  xmiss[miss.row[miss.rate.order], ] <- x.imputed
+  
+  return(xmiss)
+}
+
+#-----IShrSLLS impute-----
+ShrSLLS <- function(xmiss, K=10, sim.method="EuDist"){
+
+  miss.gene <- is.na(xmiss)
+  miss.row <- which(rowSums(miss.gene)!=0)
+  x.complete <- xmiss[-miss.row, ]
+  x.incomplete <- xmiss[miss.row, ]
+  miss.rate <- rowSums(is.na(x.incomplete))
+  miss.rate.order <- order(miss.rate)
+  therhold <- sum(miss.rate)/length(miss.rate)
+  x.incomplete <- x.incomplete[miss.rate.order, ]
+  x.imputed <- t(apply(x.incomplete, 1, function(row){
+    row.miss <- which(is.na(row))
+    sim <- similarityCal(row[-row.miss], x.complete[, -row.miss], sim.method)
+    sim.id <- order(sim, decreasing=T)[1:K]
+    x.tmp <- ginv(t(x.complete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
+    x.Shrink <- as.vector((1 - (K-2)* var(x.tmp)/((length(row) - sum(is.na(row)))*sum(x.tmp**2)))) * x.tmp 
+    row[row.miss] <- t(x.complete[sim.id, row.miss, drop=FALSE]) %*% x.Shrink
+    if(length(row.miss) <= therhold){
+      x.complete <<- rbind(x.complete, row)
+    }
+    return(row)
+  }))
+  
+  xmiss[miss.row[miss.rate.order], ] <- x.imputed
+  
+  return(xmiss)
+}
+
+IShrSLLS <- function(xmiss, K=10, sim.method="EuDist", iter=2){
+
+  xcomplete <- ShrSLLS(xmiss, K, sim.method)
+
+  miss.gene <- is.na(xmiss)
+  miss.row <- which(rowSums(miss.gene)!=0)
+
+  for(h in 1:iter) {
+    xcomplete[miss.row, ] <- t(apply(xmiss[miss.row, ], 1, function(row){
+      row.miss <- which(is.na(row))
+      sim <- similarityCal(row[-row.miss], xcomplete[, -row.miss], sim.method)
+      sim.id <- order(sim, decreasing=T)[2:(K+1)]
+      x.tmp <- ginv(t(xcomplete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
+      x.Shrink <- as.vector((1 - (K-2)* var(x.tmp)/((length(row) - sum(is.na(row)))*sum(x.tmp**2)))) * x.tmp 
+      row[row.miss] <- t(xcomplete[sim.id, row.miss, drop=FALSE]) %*% x.Shrink
+      return(row)
+    }))
+  }
+  return(xcomplete) 
+}
+IShrSLLS <- function(xmiss, K=10, sim.method="EuDist", iter=2){
+
+  xcomplete <- ShrSLLS(xmiss, K, sim.method)
+
+  miss.gene <- is.na(xmiss)
+  miss.row <- which(rowSums(miss.gene)!=0)
+
+  for(h in 1:iter) {
+    xcomplete[miss.row, ] <- t(apply(xmiss[miss.row, ], 1, function(row){
+      row.miss <- which(is.na(row))
+      sim <- similarityCal(row[-row.miss], xcomplete[, -row.miss], sim.method)
+      sim.id <- order(sim, decreasing=T)[2:(K+1)]
+      x.tmp <- ginv(t(xcomplete[sim.id, -row.miss, drop=FALSE])) %*%row[-row.miss, drop=FALSE]
+      x.Shrink <- as.vector((1 - (K-2)* var(x.tmp)/((length(row) - sum(is.na(row)))*sum(x.tmp**2)))) * x.tmp 
+      row[row.miss] <- t(xcomplete[sim.id, row.miss, drop=FALSE]) %*% x.Shrink
+      return(row)
+    }))
+  }
+  return(xcomplete) 
+}
